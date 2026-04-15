@@ -1,0 +1,181 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Darian-Frey/Cairn/schemas/cairn_v1.json",
+  "title": "CAIRN_V1 Snapshot",
+  "description": "Canonical schema for a Cairn state snapshot.",
+  "type": "object",
+  "required": ["ST_H", "project", "CTX", "OBJ", "UV", "RSK", "DEP", "PAY"],
+  "additionalProperties": true,
+  "properties": {
+    "ST_H": {
+      "type": "string",
+      "description": "State History Hash — first 16 hex chars of SHA-256 over the canonical snapshot with ST_H excluded.",
+      "pattern": "^[0-9A-F]{16}$"
+    },
+    "parent_ST_H": {
+      "description": "ST_H of the parent snapshot in the diff chain. Null for the first snapshot.",
+      "oneOf": [
+        { "type": "string", "pattern": "^[0-9A-F]{16}$" },
+        { "type": "null" }
+      ]
+    },
+    "capsule": {
+      "type": "boolean",
+      "description": "True only for sealed, immutable milestone snapshots.",
+      "default": false
+    },
+    "capsule_id": {
+      "type": "string",
+      "description": "Required if capsule is true. Stable identifier (e.g. CAP-001).",
+      "pattern": "^CAP-[0-9]{3,}$"
+    },
+    "project": {
+      "type": "string",
+      "description": "Project identifier this snapshot belongs to (e.g. 'cairn', 'coda').",
+      "minLength": 1
+    },
+    "ALN": {
+      "type": "array",
+      "description": "Active Logic Nodes — persona/logic modules active in this project.",
+      "items": { "type": "string" }
+    },
+    "CTX": {
+      "type": "string",
+      "description": "Current project state narrative."
+    },
+    "OBJ": {
+      "type": "string",
+      "description": "Primary goal of this session or phase."
+    },
+    "CON": {
+      "type": "array",
+      "description": "Hard constraints on execution.",
+      "items": { "type": "string" }
+    },
+    "UV": {
+      "type": "array",
+      "description": "Unresolved Vectors — pending work grouped into D_TASK batches.",
+      "items": { "$ref": "#/definitions/dTask" }
+    },
+    "RSK": {
+      "type": "array",
+      "description": "Risk Assessment — identified risks with severity levels.",
+      "items": { "$ref": "#/definitions/risk" }
+    },
+    "DEP": {
+      "type": "array",
+      "description": "Dependencies — required environment, versions, external systems.",
+      "items": { "$ref": "#/definitions/dependency" }
+    },
+    "BC": {
+      "type": "array",
+      "description": "Backward Compatibility constraints that must be preserved.",
+      "items": { "type": "string" }
+    },
+    "PAY": {
+      "type": "object",
+      "description": "Payload — progress metadata.",
+      "required": ["pct"],
+      "properties": {
+        "phase": { "type": "string" },
+        "pct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": true
+    },
+    "MR": {
+      "type": "array",
+      "description": "Memory Registry — pointers to external resources.",
+      "items": {
+        "type": "object",
+        "required": ["id", "ref"],
+        "properties": {
+          "id": { "type": "string" },
+          "ref": { "type": "string" },
+          "kind": { "type": "string" },
+          "desc": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "capsule": { "const": true } }, "required": ["capsule"] },
+      "then": { "required": ["capsule_id"] }
+    }
+  ],
+  "definitions": {
+    "dTask": {
+      "type": "object",
+      "description": "A D_TASK batch — atomic group of UV tasks that succeed or fail together.",
+      "required": ["d_task", "desc", "tasks", "blocking"],
+      "properties": {
+        "d_task": {
+          "type": "string",
+          "pattern": "^DT-[0-9]{2,}$"
+        },
+        "desc": { "type": "string" },
+        "blocking": { "type": "boolean" },
+        "tasks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/uvTask" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "uvTask": {
+      "type": "object",
+      "description": "A single unresolved vector inside a D_TASK.",
+      "required": ["id", "obj", "priority"],
+      "properties": {
+        "id": { "type": "string" },
+        "obj": { "type": "string" },
+        "priority": {
+          "type": "string",
+          "enum": ["p1", "p2", "p3"]
+        },
+        "dep_refs": {
+          "type": "array",
+          "description": "IDs of DEP entries this task requires.",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "risk": {
+      "type": "object",
+      "required": ["id", "level", "desc", "blocking"],
+      "properties": {
+        "id": { "type": "string" },
+        "level": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "info"]
+        },
+        "desc": { "type": "string" },
+        "blocking": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "dependency": {
+      "type": "object",
+      "required": ["id", "comp", "ver", "role"],
+      "properties": {
+        "id": { "type": "string" },
+        "comp": { "type": "string" },
+        "ver": { "type": "string" },
+        "role": { "type": "string" },
+        "requires": {
+          "type": "array",
+          "description": "IDs of other DEP entries this dependency requires. Used for circular-dep detection.",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

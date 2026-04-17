@@ -5,18 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime, timezone
+from importlib import resources
 from pathlib import Path
-from typing import Any
 
 import jsonschema
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-SCHEMA_PATH = REPO_ROOT / "schemas" / "cairn_v1.json"
-PROJECTS_SCHEMA_DIR = REPO_ROOT / "schemas" / "projects"
-CAPSULES_DIR = REPO_ROOT / "capsules"
-CAPSULE_REGISTRY = CAPSULES_DIR / "registry.json"
-SNAPSHOTS_DIR = REPO_ROOT / "snapshots"
-SNAPSHOT_INDEX = SNAPSHOTS_DIR / "index.json"
 
 
 def _utc_iso_now() -> str:
@@ -29,38 +21,77 @@ def compute_st_h(snapshot: dict) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()[:16].upper()
 
 
+def _bundled_schema_path() -> Path:
+    return Path(resources.files("cairn") / "schemas" / "cairn_v1.json")
+
+
+def _bundled_projects_dir() -> Path:
+    return Path(resources.files("cairn") / "schemas" / "projects")
+
+
 class CapsuleError(Exception):
     """Raised when capsule certification fails."""
 
 
 class CairnScanner:
+    """Validates, hashes, audits, certifies, and indexes CAIRN_V1 snapshots.
+
+    Parameters
+    ----------
+    schema_path:
+        Path to the CAIRN_V1 base schema. Defaults to the bundled package schema.
+    projects_dir:
+        Directory containing per-project schema fragments. Defaults to the bundled
+        directory. Pass `None` to disable project-extension validation entirely.
+    repo_path:
+        Target repository root (holds `snapshots/` and `capsules/`). Defaults to
+        the current working directory. Used by `certify_capsule` and index helpers.
+    """
+
     def __init__(
         self,
-        schema_path: Path | str = SCHEMA_PATH,
-        projects_dir: Path | str | None = PROJECTS_SCHEMA_DIR,
+        schema_path: Path | str | None = None,
+        projects_dir: Path | str | None | bool = True,
+        repo_path: Path | str | None = None,
     ) -> None:
-        self.schema_path = Path(schema_path)
+        self.schema_path = Path(schema_path) if schema_path else _bundled_schema_path()
         with self.schema_path.open("r", encoding="utf-8") as f:
             self.schema = json.load(f)
         self._validator = jsonschema.Draft7Validator(self.schema)
-        self.projects_dir = Path(projects_dir) if projects_dir else None
-        self._project_validators: dict[str, jsonschema.Draft7Validator] = {}
+
+        if projects_dir is True:
+            self.projects_dir: Path | None = _bundled_projects_dir()
+        elif projects_dir is False or projects_dir is None:
+            self.projects_dir = None
+        else:
+            self.projects_dir = Path(projects_dir)
+
+        self._project_validators: dict[str, jsonschema.Draft7Validator | None] = {}
+
+        self.repo_path = Path(repo_path) if repo_path is not None else Path.cwd()
+        self.capsules_dir = self.repo_path / "capsules"
+        self.capsule_registry = self.capsules_dir / "registry.json"
+        self.snapshots_dir = self.repo_path / "snapshots"
+        self.snapshot_index = self.snapshots_dir / "index.json"
+
+    # ---- project-extension loading ----
 
     def _project_validator(self, project: str) -> jsonschema.Draft7Validator | None:
-        """Return a validator for the project extension, or None if no fragment exists."""
         if not self.projects_dir or not project:
             return None
         if project in self._project_validators:
             return self._project_validators[project]
         fragment_path = self.projects_dir / f"{project}.json"
         if not fragment_path.exists():
-            self._project_validators[project] = None  # type: ignore[assignment]
+            self._project_validators[project] = None
             return None
         with fragment_path.open("r", encoding="utf-8") as f:
             fragment = json.load(f)
         validator = jsonschema.Draft7Validator(fragment)
         self._project_validators[project] = validator
         return validator
+
+    # ---- validation ----
 
     def validate_schema(self, snapshot: dict) -> bool:
         if not self._validator.is_valid(snapshot):
@@ -89,6 +120,8 @@ class CairnScanner:
             return False
         return compute_st_h(snapshot) == claimed
 
+    # ---- structural audits ----
+
     def detect_orphans(self, snapshot: dict) -> list[dict]:
         dep_ids = {d.get("id") for d in snapshot.get("DEP", []) if isinstance(d, dict)}
         orphans: list[dict] = []
@@ -100,13 +133,11 @@ class CairnScanner:
                     continue
                 missing = [ref for ref in task.get("dep_refs", []) if ref not in dep_ids]
                 if missing:
-                    orphans.append(
-                        {
-                            "d_task": batch.get("d_task"),
-                            "task_id": task.get("id"),
-                            "missing_deps": missing,
-                        }
-                    )
+                    orphans.append({
+                        "d_task": batch.get("d_task"),
+                        "task_id": task.get("id"),
+                        "missing_deps": missing,
+                    })
         return orphans
 
     def detect_circular_deps(self, snapshot: dict) -> list[list[str]]:
@@ -149,10 +180,7 @@ class CairnScanner:
 
     def audit_risks(self, snapshot: dict) -> dict[str, list[dict]]:
         grouped: dict[str, list[dict]] = {
-            "critical": [],
-            "high": [],
-            "medium": [],
-            "info": [],
+            "critical": [], "high": [], "medium": [], "info": [],
         }
         for risk in snapshot.get("RSK", []):
             if not isinstance(risk, dict):
@@ -161,6 +189,8 @@ class CairnScanner:
             if level in grouped:
                 grouped[level].append(risk)
         return grouped
+
+    # ---- capsule certification ----
 
     def certify_capsule(self, snapshot: dict, capsule_id: str) -> dict:
         if not self.validate_schema(snapshot):
@@ -175,8 +205,8 @@ class CairnScanner:
         sealed["capsule_id"] = capsule_id
         sealed["ST_H"] = compute_st_h(sealed)
 
-        CAPSULES_DIR.mkdir(parents=True, exist_ok=True)
-        capsule_path = CAPSULES_DIR / f"{capsule_id}.json"
+        self.capsules_dir.mkdir(parents=True, exist_ok=True)
+        capsule_path = self.capsules_dir / f"{capsule_id}.json"
         if capsule_path.exists():
             raise CapsuleError(f"Capsule already exists: {capsule_path}")
 
@@ -196,33 +226,53 @@ class CairnScanner:
         return record
 
     def _append_registry(self, record: dict) -> None:
-        if CAPSULE_REGISTRY.exists():
-            with CAPSULE_REGISTRY.open("r", encoding="utf-8") as f:
+        if self.capsule_registry.exists():
+            with self.capsule_registry.open("r", encoding="utf-8") as f:
                 registry = json.load(f)
         else:
             registry = {"version": "1", "capsules": []}
         registry["capsules"].append(record)
-        with CAPSULE_REGISTRY.open("w", encoding="utf-8") as f:
+        self.capsule_registry.parent.mkdir(parents=True, exist_ok=True)
+        with self.capsule_registry.open("w", encoding="utf-8") as f:
             json.dump(registry, f, indent=2, sort_keys=True)
+
+    def _index_add_capsule(self, sealed: dict, capsule_path: Path, record: dict) -> None:
+        try:
+            rel = str(capsule_path.resolve().relative_to(self.repo_path.resolve()))
+        except ValueError:
+            rel = capsule_path.name
+
+        entry = {
+            "file": rel,
+            "capsule_id": record["capsule_id"],
+            "ST_H": sealed["ST_H"],
+            "project": sealed["project"],
+            "phase": record["phase"],
+        }
+        index = self._load_index(self.snapshot_index)
+        index["capsules"] = [
+            e for e in index.get("capsules", []) if e.get("capsule_id") != record["capsule_id"]
+        ]
+        index["capsules"].append(entry)
+        index["updated_at"] = _utc_iso_now()
+        self._write_index(index, self.snapshot_index)
+
+    # ---- index operations ----
 
     def update_index(
         self,
         snapshot: dict,
-        snapshot_path: str | Path,
+        snapshot_path: Path | str,
         *,
         tags: list[str] | None = None,
-        index_path: Path = SNAPSHOT_INDEX,
-        root: Path | None = None,
+        index_path: Path | str | None = None,
+        root: Path | str | None = None,
     ) -> dict:
-        """Upsert a snapshot entry in snapshots/index.json.
-
-        Keyed on the relative file path — re-committing the same file updates
-        its entry in place rather than duplicating.
-        """
         snapshot_path = Path(snapshot_path)
-        root = Path(root) if root is not None else REPO_ROOT
+        target_index = Path(index_path) if index_path else self.snapshot_index
+        target_root = Path(root) if root is not None else self.repo_path
         try:
-            rel = str(snapshot_path.resolve().relative_to(root.resolve()))
+            rel = str(snapshot_path.resolve().relative_to(target_root.resolve()))
         except ValueError:
             rel = snapshot_path.name
 
@@ -239,55 +289,21 @@ class CairnScanner:
         if parent is not None:
             entry["parent_ST_H"] = parent
 
-        index = self._load_index(index_path)
+        index = self._load_index(target_index)
         index["snapshots"] = [e for e in index.get("snapshots", []) if e.get("file") != rel]
         index["snapshots"].append(entry)
         index["updated_at"] = _utc_iso_now()
-        self._write_index(index, index_path)
+        self._write_index(index, target_index)
         return entry
-
-    def _index_add_capsule(self, sealed: dict, capsule_path: Path, record: dict) -> None:
-        try:
-            rel = str(capsule_path.resolve().relative_to(REPO_ROOT.resolve()))
-        except ValueError:
-            rel = capsule_path.name
-
-        entry = {
-            "file": rel,
-            "capsule_id": record["capsule_id"],
-            "ST_H": sealed["ST_H"],
-            "project": sealed["project"],
-            "phase": record["phase"],
-        }
-        index = self._load_index(SNAPSHOT_INDEX)
-        index["capsules"] = [
-            e for e in index.get("capsules", []) if e.get("capsule_id") != record["capsule_id"]
-        ]
-        index["capsules"].append(entry)
-        index["updated_at"] = _utc_iso_now()
-        self._write_index(index, SNAPSHOT_INDEX)
-
-    @staticmethod
-    def _load_index(path: Path) -> dict:
-        if path.exists():
-            with path.open("r", encoding="utf-8") as f:
-                return json.load(f)
-        return {"version": "1", "updated_at": None, "snapshots": [], "capsules": []}
-
-    @staticmethod
-    def _write_index(index: dict, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8") as f:
-            json.dump(index, f, indent=2, sort_keys=True)
 
     def validate_index(
         self,
         index: dict,
-        snapshot_dir: str | Path,
-        root: str | Path | None = None,
+        snapshot_dir: Path | str,
+        root: Path | str | None = None,
     ) -> list[str]:
         snapshot_dir = Path(snapshot_dir)
-        root = Path(root) if root is not None else REPO_ROOT
+        target_root = Path(root) if root is not None else self.repo_path
         discrepancies: list[str] = []
 
         indexed_files = {entry.get("file") for entry in index.get("snapshots", [])}
@@ -296,7 +312,7 @@ class CairnScanner:
             if not file_rel:
                 discrepancies.append("snapshot entry missing 'file'")
                 continue
-            path = root / file_rel
+            path = target_root / file_rel
             if not path.exists():
                 discrepancies.append(f"indexed snapshot missing on disk: {file_rel}")
                 continue
@@ -316,7 +332,7 @@ class CairnScanner:
                 if path.name == "index.json":
                     continue
                 try:
-                    rel = str(path.relative_to(root))
+                    rel = str(path.relative_to(target_root))
                 except ValueError:
                     rel = path.name
                 if rel not in indexed_files:
@@ -327,90 +343,20 @@ class CairnScanner:
             if not file_rel:
                 discrepancies.append("capsule entry missing 'file'")
                 continue
-            if not (root / file_rel).exists():
+            if not (target_root / file_rel).exists():
                 discrepancies.append(f"indexed capsule missing on disk: {file_rel}")
 
         return discrepancies
 
+    @staticmethod
+    def _load_index(path: Path) -> dict:
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        return {"version": "1", "updated_at": None, "snapshots": [], "capsules": []}
 
-def _cli() -> int:
-    import argparse
-
-    parser = argparse.ArgumentParser(description="CAIRN_V1 scanner")
-    sub = parser.add_subparsers(dest="cmd", required=True)
-
-    p_val = sub.add_parser("validate", help="Validate a snapshot against the schema")
-    p_val.add_argument("snapshot", type=Path)
-
-    p_int = sub.add_parser("integrity", help="Verify snapshot ST_H")
-    p_int.add_argument("snapshot", type=Path)
-
-    p_audit = sub.add_parser("audit", help="Full audit of a snapshot")
-    p_audit.add_argument("snapshot", type=Path)
-
-    p_cert = sub.add_parser("certify", help="Certify a snapshot as a capsule")
-    p_cert.add_argument("snapshot", type=Path)
-    p_cert.add_argument("capsule_id")
-
-    p_idx = sub.add_parser("index", help="Validate snapshots/index.json")
-    p_idx.add_argument("index", type=Path)
-    p_idx.add_argument("snapshot_dir", type=Path)
-
-    args = parser.parse_args()
-    scanner = CairnScanner()
-
-    def load(path: Path) -> Any:
-        with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
-
-    if args.cmd == "validate":
-        snap = load(args.snapshot)
-        ok = scanner.validate_schema(snap)
-        if ok:
-            print("OK")
-            return 0
-        for err in scanner.schema_errors(snap):
-            print(f"  - {err}")
-        return 1
-
-    if args.cmd == "integrity":
-        snap = load(args.snapshot)
-        ok = scanner.verify_integrity(snap)
-        print("OK" if ok else f"MISMATCH (expected {compute_st_h(snap)})")
-        return 0 if ok else 1
-
-    if args.cmd == "audit":
-        snap = load(args.snapshot)
-        report = {
-            "schema_valid": scanner.validate_schema(snap),
-            "schema_errors": scanner.schema_errors(snap),
-            "integrity": scanner.verify_integrity(snap),
-            "orphans": scanner.detect_orphans(snap),
-            "circular_deps": scanner.detect_circular_deps(snap),
-            "est_tokens": scanner.estimate_token_cost(snap),
-            "risks": scanner.audit_risks(snap),
-        }
-        print(json.dumps(report, indent=2))
-        return 0 if report["schema_valid"] and report["integrity"] else 1
-
-    if args.cmd == "certify":
-        snap = load(args.snapshot)
-        record = scanner.certify_capsule(snap, args.capsule_id)
-        print(json.dumps(record, indent=2))
-        return 0
-
-    if args.cmd == "index":
-        idx = load(args.index)
-        issues = scanner.validate_index(idx, args.snapshot_dir)
-        if not issues:
-            print("OK")
-            return 0
-        for issue in issues:
-            print(f"  - {issue}")
-        return 1
-
-    return 2
-
-
-if __name__ == "__main__":
-    raise SystemExit(_cli())
+    @staticmethod
+    def _write_index(index: dict, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(index, f, indent=2, sort_keys=True)

@@ -150,7 +150,7 @@ Normative specification of the four-step rehydration algorithm from CLAUDE.md §
 
 ---
 
-### [tools/cairn_init.py](tools/cairn_init.py) — project seeder
+### [cairn/init.py](cairn/init.py) — project seeder
 
 Seeds a fresh tree with the Cairn layout; idempotent by default (`--force` to overwrite).
 
@@ -158,8 +158,19 @@ Seeds a fresh tree with the Cairn layout; idempotent by default (`--force` to ov
 - [x] Seeds `snapshots/index.json` and `capsules/registry.json` with empty structures
 - [x] Appends a Cairn block to `.gitignore` (or creates one); never duplicates on re-run
 - [x] Optional `CLAUDE.md` stub (`--with-claude-md`)
-- [x] CLI: `python tools/cairn_init.py <project> [--target DIR] [--force] [--with-claude-md] [--with-projects-dir]`
+- [x] `--with-bundled-projects` copies the four bundled fragments (coda / terra-siege / nyx-audio / lumina) into the target's `schemas/projects/`
+- [x] CLI: `cairn init <project> [--target DIR] [--force] [--with-claude-md] [--with-projects-dir] [--with-bundled-projects]`
 - [x] 15 tests covering fresh init, flags, idempotence, force-overwrite, and a post-init smoke check (author + commit a snapshot into the initialised tree)
+
+### Package distribution — [pyproject.toml](pyproject.toml)
+
+Cairn is now installable as a Python package.
+
+- [x] Unified layout under [cairn/](cairn/) — `scanner.py`, `client.py`, `server.py`, `claude_md.py`, `init.py`, `cli.py`
+- [x] Schemas bundled as package data at [cairn/schemas/](cairn/schemas/) — `cairn_v1.json` + all four project fragments
+- [x] Unified `cairn` entry point via `[project.scripts]` — 11 subcommands replace the four pre-packaging scripts
+- [x] Editable install verified: `uv pip install -e ".[dev]"` → `cairn --help`, `cairn init <project>`, `cairn validate ...`
+- [x] Install target: `pip install git+https://github.com/Darian-Frey/Cairn.git` for consumers
 
 ### CAP-001 — "Foundation complete" (sealed 2026-04-17)
 

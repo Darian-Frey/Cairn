@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cairn"
+version = "0.1.0"
+description = "CAIRN_V1 — deterministic state-serialisation protocol for AI-driven development."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Shane Hartley", email = "shane.hartley06@googlemail.com" }]
+keywords = ["ai", "agents", "state-serialisation", "snapshots", "claude"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "jsonschema>=4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+cairn = "cairn.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Darian-Frey/Cairn"
+Issues = "https://github.com/Darian-Frey/Cairn/issues"
+
+[tool.setuptools.packages.find]
+include = ["cairn*"]
+
+[tool.setuptools.package-data]
+cairn = ["schemas/*.json", "schemas/projects/*.json"]
+
+[tool.pyright]
+include = ["cairn", "tests"]
+extraPaths = ["."]
+venvPath = "."
+venv = ".venv"
+reportUnusedImport = "none"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

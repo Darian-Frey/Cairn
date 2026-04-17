@@ -1,2 +1,4 @@
--r requirements.txt
-pytest>=7.0
+# Dev requirements for Cairn.
+# Authoritative dependency list lives in pyproject.toml ([project.optional-dependencies].dev).
+# This file installs the package with dev extras; prefer `pip install -e ".[dev]"` directly.
+-e .[dev]

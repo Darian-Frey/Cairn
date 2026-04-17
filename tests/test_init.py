@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from tools.cairn_init import init_project
+from cairn.init import init_project
 
 
 class TestFreshInit:
@@ -116,8 +116,8 @@ class TestDeployable:
     """Confirm that after init, a fresh scanner+client can operate on the tree."""
 
     def test_scanner_and_client_work_on_init_tree(self, tmp_path):
-        from src.cairn_client import CairnClient
-        from tools.cairn_scanner import compute_st_h
+        from cairn.client import CairnClient
+        from cairn.scanner import compute_st_h
 
         init_project(tmp_path, "testproj", write_projects_dir=True)
 

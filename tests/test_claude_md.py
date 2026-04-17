@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from src.claude_md import markdown_to_snapshot, snapshot_to_markdown
-from tools.cairn_scanner import CairnScanner, compute_st_h
+from cairn.claude_md import markdown_to_snapshot, snapshot_to_markdown
+from cairn.scanner import CairnScanner, compute_st_h
 
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"

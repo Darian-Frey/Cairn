@@ -8,11 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from tools.cairn_scanner import CairnScanner, compute_st_h
+from cairn.scanner import CairnScanner, compute_st_h
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PROJECTS_DIR = REPO_ROOT / "schemas" / "projects"
+from importlib import resources
+PROJECTS_DIR = Path(resources.files("cairn") / "schemas" / "projects")
 
 
 def _base_snapshot(project: str, proj_ext: dict) -> dict:

@@ -11,18 +11,13 @@ the commit pipeline without spawning a CLI per call.
 from __future__ import annotations
 
 import json
-import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-REPO_ROOT_DEFAULT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT_DEFAULT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT_DEFAULT))
-
-from src.cairn_client import CairnClient, CommitError  # noqa: E402
+from cairn.client import CairnClient, CommitError
 
 
 DEFAULT_HOST = "127.0.0.1"
@@ -34,11 +29,9 @@ def _truthy(v: str | None) -> bool:
 
 
 class _Handler(BaseHTTPRequestHandler):
-    # Injected by CairnServer
     client: CairnClient = None  # type: ignore[assignment]
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
-        # Silence default stderr logging; tests run quieter this way.
         return
 
     def _send_json(self, status: int, body: dict) -> None:
@@ -48,8 +41,6 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
-
-    # ---- POST /snapshot ----
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
@@ -75,7 +66,7 @@ class _Handler(BaseHTTPRequestHandler):
         params = parse_qs(parsed.query)
         force = _truthy((params.get("force") or [None])[0])
         dry_run = _truthy((params.get("dry_run") or [None])[0])
-        push = _truthy((params.get("push") or ["false"])[0])  # default: local-only
+        push = _truthy((params.get("push") or ["false"])[0])
         raw_tags = (params.get("tags") or [""])[0]
         tags = [t.strip() for t in raw_tags.split(",") if t.strip()] or None
 
@@ -109,8 +100,6 @@ class _Handler(BaseHTTPRequestHandler):
                 "parent_st_h_link": diff.parent_st_h_link,
             },
         })
-
-    # ---- GET /status and /health ----
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
@@ -150,7 +139,7 @@ class CairnServer:
         self,
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
-        repo_path: str | Path = REPO_ROOT_DEFAULT,
+        repo_path: str | Path | None = None,
         client: CairnClient | None = None,
     ) -> None:
         self.host = host
@@ -160,7 +149,6 @@ class CairnServer:
         handler_cls = type("_BoundHandler", (_Handler,), {"client": self.client})
         self._server = HTTPServer((host, port), handler_cls)
         self._thread: threading.Thread | None = None
-        # Resolve the actual bound port (useful when port=0 for tests)
         self.port = self._server.server_address[1]
 
     def serve_forever(self) -> None:
@@ -179,25 +167,3 @@ class CairnServer:
         if self._thread is not None:
             self._thread.join(timeout=2)
             self._thread = None
-
-
-def _cli() -> int:
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Cairn IPC server")
-    parser.add_argument("--host", default=DEFAULT_HOST)
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    parser.add_argument("--repo", type=Path, default=REPO_ROOT_DEFAULT)
-    args = parser.parse_args()
-
-    server = CairnServer(host=args.host, port=args.port, repo_path=args.repo)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\n[*] shutting down")
-        server.shutdown()
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(_cli())

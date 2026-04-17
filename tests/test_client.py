@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from src.cairn_client import CairnClient, CommitError
-from tools.cairn_scanner import CairnScanner, compute_st_h
+from cairn.client import CairnClient, CommitError
+from cairn.scanner import compute_st_h
 
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"

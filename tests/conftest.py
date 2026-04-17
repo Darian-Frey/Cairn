@@ -3,17 +3,13 @@
 from __future__ import annotations
 
 import copy
-import sys
 from pathlib import Path
 
 import pytest
 
+from cairn.scanner import compute_st_h
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from tools.cairn_scanner import compute_st_h  # noqa: E402
-
 OLD_CODE_FIXTURES = REPO_ROOT / "old_code" / "ltm_bridge" / "snapshots"
 
 
@@ -67,18 +63,14 @@ def clone_snapshot():
 
 
 @pytest.fixture
-def tmp_capsule_env(tmp_path, monkeypatch):
-    """Redirect capsule + index writes into a temp dir for isolation."""
-    import tools.cairn_scanner as scanner_mod
+def tmp_capsule_env(tmp_path):
+    """Construct a scanner pointed at a tmp repo — returns (scanner, tmp_path, capsules, registry, snaps_dir, index)."""
+    from cairn.scanner import CairnScanner
 
+    (tmp_path / "snapshots").mkdir()
     caps_dir = tmp_path / "capsules"
     registry = caps_dir / "registry.json"
     snaps_dir = tmp_path / "snapshots"
     index = snaps_dir / "index.json"
-    snaps_dir.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(scanner_mod, "CAPSULES_DIR", caps_dir)
-    monkeypatch.setattr(scanner_mod, "CAPSULE_REGISTRY", registry)
-    monkeypatch.setattr(scanner_mod, "SNAPSHOTS_DIR", snaps_dir)
-    monkeypatch.setattr(scanner_mod, "SNAPSHOT_INDEX", index)
-    monkeypatch.setattr(scanner_mod, "REPO_ROOT", tmp_path)
-    return caps_dir, registry, snaps_dir, index
+    scanner = CairnScanner(repo_path=tmp_path)
+    return scanner, tmp_path, caps_dir, registry, snaps_dir, index

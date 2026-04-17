@@ -7,14 +7,11 @@ The JSON files are checked in — this script is the canonical authorship.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parent.parent
-sys.path.insert(0, str(REPO_ROOT))
+from cairn.scanner import compute_st_h
 
-from tools.cairn_scanner import compute_st_h  # noqa: E402
+HERE = Path(__file__).resolve().parent
 
 
 def _write(name: str, snap: dict) -> None:

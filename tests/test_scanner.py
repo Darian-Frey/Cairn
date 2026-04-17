@@ -1,4 +1,4 @@
-"""Tests for tools/cairn_scanner.py — covers priority cases 1, 2, 5 from CLAUDE.md §8."""
+"""Tests for cairn.scanner — covers priority cases 1, 2, 5 from CLAUDE.md §8."""
 
 from __future__ import annotations
 
@@ -6,11 +6,7 @@ import json
 
 import pytest
 
-from tools.cairn_scanner import (
-    CairnScanner,
-    CapsuleError,
-    compute_st_h,
-)
+from cairn.scanner import CairnScanner, CapsuleError, compute_st_h
 from tests.conftest import OLD_CODE_FIXTURES
 
 
@@ -186,8 +182,7 @@ class TestAuditRisks:
 
 class TestCertifyCapsule:
     def test_writes_file_and_registry(self, minimal_snapshot, tmp_capsule_env):
-        caps_dir, registry, _snaps, _idx = tmp_capsule_env
-        scanner = CairnScanner()
+        scanner, _tmp, caps_dir, registry, _snaps, _idx = tmp_capsule_env
         record = scanner.certify_capsule(minimal_snapshot, "CAP-001")
 
         capsule_path = caps_dir / "CAP-001.json"
@@ -206,24 +201,25 @@ class TestCertifyCapsule:
         assert reg["capsules"][0]["capsule_id"] == "CAP-001"
 
     def test_rejects_duplicate(self, minimal_snapshot, tmp_capsule_env):
-        scanner = CairnScanner()
+        scanner, *_ = tmp_capsule_env
         scanner.certify_capsule(minimal_snapshot, "CAP-001")
         with pytest.raises(CapsuleError, match="already exists"):
             scanner.certify_capsule(minimal_snapshot, "CAP-001")
 
     def test_rejects_invalid_schema(self, minimal_snapshot, tmp_capsule_env):
+        scanner, *_ = tmp_capsule_env
         del minimal_snapshot["OBJ"]
         with pytest.raises(CapsuleError, match="schema validation"):
-            CairnScanner().certify_capsule(minimal_snapshot, "CAP-002")
+            scanner.certify_capsule(minimal_snapshot, "CAP-002")
 
     def test_rejects_integrity_failure(self, minimal_snapshot, tmp_capsule_env):
+        scanner, *_ = tmp_capsule_env
         minimal_snapshot["ST_H"] = "0000000000000000"
         with pytest.raises(CapsuleError, match="ST_H"):
-            CairnScanner().certify_capsule(minimal_snapshot, "CAP-003")
+            scanner.certify_capsule(minimal_snapshot, "CAP-003")
 
     def test_appends_to_existing_registry(self, minimal_snapshot, clone_snapshot, tmp_capsule_env):
-        _, registry, _snaps, _idx = tmp_capsule_env
-        scanner = CairnScanner()
+        scanner, _tmp, _caps, registry, _snaps, _idx = tmp_capsule_env
         scanner.certify_capsule(minimal_snapshot, "CAP-001")
         second = clone_snapshot(minimal_snapshot, OBJ="different phase")
         scanner.certify_capsule(second, "CAP-002")
@@ -335,8 +331,8 @@ class TestUpdateIndex:
 
 class TestCapsuleIndexWiring:
     def test_capsule_appears_in_index(self, minimal_snapshot, tmp_capsule_env):
-        _caps, _reg, _snaps, index_path = tmp_capsule_env
-        CairnScanner().certify_capsule(minimal_snapshot, "CAP-001")
+        scanner, _tmp, _caps, _reg, _snaps, index_path = tmp_capsule_env
+        scanner.certify_capsule(minimal_snapshot, "CAP-001")
 
         idx = json.loads(index_path.read_text())
         assert len(idx["capsules"]) == 1
@@ -347,10 +343,8 @@ class TestCapsuleIndexWiring:
     def test_capsule_entry_deduped_on_re_register(
         self, minimal_snapshot, clone_snapshot, tmp_capsule_env
     ):
-        _caps, _reg, _snaps, index_path = tmp_capsule_env
-        scanner = CairnScanner()
+        scanner, _tmp, _caps, _reg, _snaps, index_path = tmp_capsule_env
         scanner.certify_capsule(minimal_snapshot, "CAP-001")
-        # second capsule with a different id
         second = clone_snapshot(minimal_snapshot, OBJ="second")
         scanner.certify_capsule(second, "CAP-002")
         idx = json.loads(index_path.read_text())

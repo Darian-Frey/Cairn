@@ -15,14 +15,12 @@ import json
 import re
 from typing import Any
 
-from tools.cairn_scanner import compute_st_h
+from cairn.scanner import compute_st_h
 
 
 META_OPEN = "<!-- cairn-v1"
 META_CLOSE = "-->"
 
-
-# ---------- export ----------
 
 def snapshot_to_markdown(snap: dict) -> str:
     meta = {
@@ -131,8 +129,6 @@ def snapshot_to_markdown(snap: dict) -> str:
 
     return "\n".join(parts).rstrip() + "\n"
 
-
-# ---------- import ----------
 
 _META_RE = re.compile(
     re.escape(META_OPEN) + r"\s*(.*?)\s*" + re.escape(META_CLOSE), re.DOTALL

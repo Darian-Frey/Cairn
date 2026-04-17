@@ -1,4 +1,13 @@
 {
-  "version": "1",
-  "capsules": []
+  "capsules": [
+    {
+      "ST_H": "1E0AA842450DB7BB",
+      "capsule_id": "CAP-001",
+      "certified": true,
+      "phase": "Foundation complete",
+      "project": "cairn",
+      "sealed_at": "2026-04-17T22:11:42Z"
+    }
+  ],
+  "version": "1"
 }

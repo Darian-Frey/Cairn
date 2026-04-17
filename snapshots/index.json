@@ -1,6 +1,27 @@
 {
-  "version": "1",
-  "updated_at": null,
-  "snapshots": [],
-  "capsules": []
+  "capsules": [
+    {
+      "ST_H": "1E0AA842450DB7BB",
+      "capsule_id": "CAP-001",
+      "file": "capsules/CAP-001.json",
+      "phase": "Foundation complete",
+      "project": "cairn"
+    }
+  ],
+  "snapshots": [
+    {
+      "ST_H": "C6E4104B81F8449A",
+      "capsule": false,
+      "file": "snapshots/cairn_20260417_221142_710132.json",
+      "pct": 100,
+      "phase": "Foundation complete",
+      "project": "cairn",
+      "tags": [
+        "foundation",
+        "milestone"
+      ]
+    }
+  ],
+  "updated_at": "2026-04-17T22:11:42Z",
+  "version": "1"
 }

@@ -1,0 +1,117 @@
+{
+  "BC": [],
+  "CON": [
+    "Capsules remain immutable \u2014 never prune or overwrite.",
+    "No SCHEMA_V5 naming in new code.",
+    "Use 'structured rehydration' language \u2014 never 'deterministic replay'.",
+    "Never modify old_code/."
+  ],
+  "CTX": "Foundation phase complete. Scanner (tools/cairn_scanner.py) with all \u00a74 methods plus update_index; schema (schemas/cairn_v1.json) with D_TASK, RSK severity, capsule-conditional, PROJ_EXT container; client (src/cairn_client.py) with commit/diff/prune/export/import; IPC server (src/cairn_server.py) stdlib-only; four project extensions (schemas/projects/); normative rehydration spec (specs/rehydration.md). 135 tests passing across 6 test modules.",
+  "DEP": [
+    {
+      "comp": "python",
+      "id": "dep_python",
+      "role": "runtime",
+      "ver": "3.12"
+    },
+    {
+      "comp": "jsonschema",
+      "id": "dep_jsonschema",
+      "role": "validation",
+      "ver": ">=4.0"
+    },
+    {
+      "comp": "git",
+      "id": "dep_git",
+      "role": "commit-pipeline",
+      "ver": ">=2.30"
+    },
+    {
+      "comp": "pytest",
+      "id": "dep_pytest",
+      "role": "test-runner",
+      "ver": ">=7.0"
+    }
+  ],
+  "MR": [
+    {
+      "id": "cairn-repo",
+      "kind": "gh",
+      "ref": "github.com/Darian-Frey/Cairn"
+    },
+    {
+      "desc": "Project handoff spec",
+      "id": "claude-md",
+      "kind": "path",
+      "ref": "CLAUDE.md"
+    },
+    {
+      "desc": "Normative rehydration algorithm",
+      "id": "rehydration-spec",
+      "kind": "path",
+      "ref": "specs/rehydration.md"
+    }
+  ],
+  "OBJ": "Exit the foundation phase and begin \u00a711 deployments. First target: CODA integration.",
+  "PAY": {
+    "pct": 100,
+    "phase": "Foundation complete"
+  },
+  "RSK": [
+    {
+      "blocking": false,
+      "desc": "No \u00a711 deployments yet \u2014 all validation is internal to the Cairn repo. First live deployment (CODA) will exercise edges that synthetic tests cannot.",
+      "id": "r_no_real_deployment",
+      "level": "info"
+    }
+  ],
+  "ST_H": "1E0AA842450DB7BB",
+  "UV": [
+    {
+      "blocking": false,
+      "d_task": "DT-01",
+      "desc": "\u00a711 deployment pipeline",
+      "tasks": [
+        {
+          "id": "uv_cairn_init",
+          "obj": "Ship `cairn init` command for seeding fresh project trees",
+          "priority": "p1"
+        },
+        {
+          "dep_refs": [
+            "dep_git"
+          ],
+          "id": "uv_coda_integration",
+          "obj": "Deploy Cairn into the CODA repo and seal its first snapshot",
+          "priority": "p1"
+        },
+        {
+          "id": "uv_coda_first_capsule",
+          "obj": "Seal CODA's first milestone as a capsule under its own CAP- sequence",
+          "priority": "p2"
+        }
+      ]
+    },
+    {
+      "blocking": false,
+      "d_task": "DT-02",
+      "desc": "Server hardening (deferred)",
+      "tasks": [
+        {
+          "id": "uv_server_auth",
+          "obj": "Add auth token for cross-machine server use",
+          "priority": "p3"
+        },
+        {
+          "id": "uv_server_logging",
+          "obj": "Structured logging for the IPC server",
+          "priority": "p3"
+        }
+      ]
+    }
+  ],
+  "capsule": true,
+  "capsule_id": "CAP-001",
+  "parent_ST_H": null,
+  "project": "cairn"
+}

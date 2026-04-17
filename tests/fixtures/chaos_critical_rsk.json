@@ -1,0 +1,66 @@
+{
+  "ALN": [
+    "logic_trap",
+    "dependency_hell"
+  ],
+  "BC": [
+    "v1.0 must be maintained for failback"
+  ],
+  "CON": [
+    "Zero downtime",
+    "No data loss"
+  ],
+  "CTX": "Simulating a critical infrastructure migration under duress.",
+  "DEP": [
+    {
+      "comp": "Core-Validator",
+      "id": "dep_core_validator",
+      "role": "Anti-Corruption Gate",
+      "ver": "v2.0-patch-A"
+    }
+  ],
+  "MR": [
+    {
+      "id": "LTM-Bridge-Core",
+      "kind": "gh",
+      "ref": "github.com/Darian-Frey/LTM-Bridge"
+    }
+  ],
+  "OBJ": "Complete the 'Omni-Sync' deployment without data loss.",
+  "PAY": {
+    "pct": 0,
+    "phase": "CHAOS_STRESS_TEST"
+  },
+  "RSK": [
+    {
+      "blocking": true,
+      "desc": "Omni-Sync logic contains a feedback loop that will corrupt the database if uv_deploy runs before dep_core_validator is patched.",
+      "id": "r_logic_trap",
+      "level": "critical"
+    }
+  ],
+  "ST_H": "8E4A3CC39E93F392",
+  "UV": [
+    {
+      "blocking": true,
+      "d_task": "DT-01",
+      "desc": "Omni-Sync cutover batch",
+      "tasks": [
+        {
+          "dep_refs": [
+            "dep_core_validator"
+          ],
+          "id": "uv_deploy",
+          "obj": "Execute production cutover",
+          "priority": "p1"
+        },
+        {
+          "id": "uv_cleanup",
+          "obj": "Decommission legacy nodes",
+          "priority": "p2"
+        }
+      ]
+    }
+  ],
+  "project": "cairn"
+}

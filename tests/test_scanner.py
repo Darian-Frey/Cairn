@@ -186,7 +186,7 @@ class TestAuditRisks:
 
 class TestCertifyCapsule:
     def test_writes_file_and_registry(self, minimal_snapshot, tmp_capsule_env):
-        caps_dir, registry = tmp_capsule_env
+        caps_dir, registry, _snaps, _idx = tmp_capsule_env
         scanner = CairnScanner()
         record = scanner.certify_capsule(minimal_snapshot, "CAP-001")
 
@@ -222,7 +222,7 @@ class TestCertifyCapsule:
             CairnScanner().certify_capsule(minimal_snapshot, "CAP-003")
 
     def test_appends_to_existing_registry(self, minimal_snapshot, clone_snapshot, tmp_capsule_env):
-        _, registry = tmp_capsule_env
+        _, registry, _snaps, _idx = tmp_capsule_env
         scanner = CairnScanner()
         scanner.certify_capsule(minimal_snapshot, "CAP-001")
         second = clone_snapshot(minimal_snapshot, OBJ="different phase")
@@ -270,7 +270,95 @@ class TestValidateIndex:
         assert CairnScanner().validate_index(index, snap_dir, root=tmp_path) == []
 
 
-# ---------- old_code fixtures (skipped until dropped in) ----------
+# ---------- update_index ----------
+
+class TestUpdateIndex:
+    def test_inserts_new_entry(self, tmp_path, minimal_snapshot):
+        index_path = tmp_path / "index.json"
+        snap_path = tmp_path / "snapshots" / "s1.json"
+        snap_path.parent.mkdir()
+        snap_path.write_text(json.dumps(minimal_snapshot))
+
+        entry = CairnScanner().update_index(
+            minimal_snapshot, snap_path, tags=["foundation"], index_path=index_path, root=tmp_path
+        )
+        assert entry["ST_H"] == minimal_snapshot["ST_H"]
+        assert entry["tags"] == ["foundation"]
+        assert entry["capsule"] is False
+
+        idx = json.loads(index_path.read_text())
+        assert len(idx["snapshots"]) == 1
+        assert idx["snapshots"][0]["file"] == "snapshots/s1.json"
+        assert idx["updated_at"] is not None
+
+    def test_upserts_on_same_file(self, tmp_path, minimal_snapshot, clone_snapshot):
+        index_path = tmp_path / "index.json"
+        snap_path = tmp_path / "snapshots" / "s1.json"
+        snap_path.parent.mkdir()
+
+        scanner = CairnScanner()
+        scanner.update_index(minimal_snapshot, snap_path, index_path=index_path, root=tmp_path)
+        mutated = clone_snapshot(minimal_snapshot, OBJ="phase change")
+        scanner.update_index(mutated, snap_path, index_path=index_path, root=tmp_path)
+
+        idx = json.loads(index_path.read_text())
+        assert len(idx["snapshots"]) == 1
+        assert idx["snapshots"][0]["ST_H"] == mutated["ST_H"]
+
+    def test_distinct_files_both_kept(self, tmp_path, minimal_snapshot, clone_snapshot):
+        index_path = tmp_path / "index.json"
+        snap_dir = tmp_path / "snapshots"
+        snap_dir.mkdir()
+        a = snap_dir / "a.json"
+        b = snap_dir / "b.json"
+
+        scanner = CairnScanner()
+        scanner.update_index(minimal_snapshot, a, index_path=index_path, root=tmp_path)
+        scanner.update_index(clone_snapshot(minimal_snapshot, OBJ="b"), b,
+                             index_path=index_path, root=tmp_path)
+
+        idx = json.loads(index_path.read_text())
+        files = sorted(e["file"] for e in idx["snapshots"])
+        assert files == ["snapshots/a.json", "snapshots/b.json"]
+
+    def test_preserves_parent_st_h(self, tmp_path, minimal_snapshot, clone_snapshot):
+        index_path = tmp_path / "index.json"
+        snap_path = tmp_path / "snapshots" / "s1.json"
+        snap_path.parent.mkdir()
+        child = clone_snapshot(minimal_snapshot, parent_ST_H=minimal_snapshot["ST_H"])
+
+        entry = CairnScanner().update_index(child, snap_path, index_path=index_path, root=tmp_path)
+        assert entry["parent_ST_H"] == minimal_snapshot["ST_H"]
+
+
+# ---------- certify_capsule also updates snapshots/index.json ----------
+
+class TestCapsuleIndexWiring:
+    def test_capsule_appears_in_index(self, minimal_snapshot, tmp_capsule_env):
+        _caps, _reg, _snaps, index_path = tmp_capsule_env
+        CairnScanner().certify_capsule(minimal_snapshot, "CAP-001")
+
+        idx = json.loads(index_path.read_text())
+        assert len(idx["capsules"]) == 1
+        assert idx["capsules"][0]["capsule_id"] == "CAP-001"
+        assert idx["capsules"][0]["project"] == "cairn"
+        assert idx["capsules"][0]["file"].endswith("CAP-001.json")
+
+    def test_capsule_entry_deduped_on_re_register(
+        self, minimal_snapshot, clone_snapshot, tmp_capsule_env
+    ):
+        _caps, _reg, _snaps, index_path = tmp_capsule_env
+        scanner = CairnScanner()
+        scanner.certify_capsule(minimal_snapshot, "CAP-001")
+        # second capsule with a different id
+        second = clone_snapshot(minimal_snapshot, OBJ="second")
+        scanner.certify_capsule(second, "CAP-002")
+        idx = json.loads(index_path.read_text())
+        ids = [c["capsule_id"] for c in idx["capsules"]]
+        assert ids == ["CAP-001", "CAP-002"]
+
+
+# ---------- old_code fixtures ----------
 
 OLD_FIXTURES = [
     "chaos_test_v1.json",
@@ -280,17 +368,72 @@ OLD_FIXTURES = [
 ]
 
 
+CAIRN_V1_FIXTURES = [
+    "chaos_critical_rsk.json",
+    "diff_baseline.json",
+    "diff_phase_change.json",
+    "diff_no_change.json",
+]
+
+FIXTURES_DIR = OLD_CODE_FIXTURES.parent.parent.parent / "tests" / "fixtures"
+
+
+@pytest.mark.parametrize("name", CAIRN_V1_FIXTURES)
+def test_cairn_v1_fixture_valid(name):
+    """§8 case #1: valid CAIRN_V1 fixtures pass validate_schema."""
+    path = FIXTURES_DIR / name
+    with path.open("r", encoding="utf-8") as f:
+        snap = json.load(f)
+    scanner = CairnScanner()
+    assert scanner.validate_schema(snap), scanner.schema_errors(snap)
+
+
+@pytest.mark.parametrize("name", CAIRN_V1_FIXTURES)
+def test_cairn_v1_fixture_integrity(name):
+    path = FIXTURES_DIR / name
+    with path.open("r", encoding="utf-8") as f:
+        snap = json.load(f)
+    assert CairnScanner().verify_integrity(snap)
+
+
+def test_chaos_fixture_has_critical_blocking_risk():
+    """§8 case #4 substrate: the chaos fixture carries a blocking critical RSK."""
+    with (FIXTURES_DIR / "chaos_critical_rsk.json").open("r", encoding="utf-8") as f:
+        snap = json.load(f)
+    grouped = CairnScanner().audit_risks(snap)
+    assert len(grouped["critical"]) == 1
+    assert grouped["critical"][0]["blocking"] is True
+
+
+def test_diff_chain_parent_link():
+    """§8 case #3 substrate: diff_phase_change points at diff_baseline via parent_ST_H."""
+    with (FIXTURES_DIR / "diff_baseline.json").open("r", encoding="utf-8") as f:
+        base = json.load(f)
+    with (FIXTURES_DIR / "diff_phase_change.json").open("r", encoding="utf-8") as f:
+        child = json.load(f)
+    assert child["parent_ST_H"] == base["ST_H"]
+    assert child["ST_H"] != base["ST_H"]
+
+
+def test_no_change_fixture_is_byte_equivalent():
+    """§8 case #3 no-op path: identical ST_H => identical semantic content."""
+    with (FIXTURES_DIR / "diff_phase_change.json").open("r", encoding="utf-8") as f:
+        a = json.load(f)
+    with (FIXTURES_DIR / "diff_no_change.json").open("r", encoding="utf-8") as f:
+        b = json.load(f)
+    assert a["ST_H"] == b["ST_H"]
+
+
 @pytest.mark.parametrize("name", OLD_FIXTURES)
 def test_old_code_fixture_loads(name):
-    """Sanity: old_code fixtures parse as JSON once dropped in.
+    """Sanity: old_code fixtures parse as JSON.
 
-    These fixtures predate CAIRN_V1, so they are NOT expected to validate
-    against the current schema — the test suite for §8 case #1 will need
-    either fixture migration or a legacy-schema shim. For now, just confirm
-    the file is syntactically JSON when present.
+    Legacy fixtures use the v1.2 format (predates CAIRN_V1) and are NOT
+    expected to validate against the current schema — they remain reference-only.
+    Hand-authored CAIRN_V1 equivalents will live in tests/fixtures/.
     """
     path = OLD_CODE_FIXTURES / name
     if not path.exists():
-        pytest.skip(f"{name} not yet present in old_code/snapshots/")
+        pytest.skip(f"{name} not present at {path}")
     with path.open("r", encoding="utf-8") as f:
         json.load(f)

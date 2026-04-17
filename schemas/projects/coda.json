@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Darian-Frey/Cairn/schemas/projects/coda.json",
+  "title": "CAIRN_V1 — CODA extension",
+  "description": "Project-specific fields for CODA (covariant Krylov complexity / GR).",
+  "type": "object",
+  "required": ["PROJ_EXT"],
+  "properties": {
+    "project": { "const": "coda" },
+    "PROJ_EXT": {
+      "type": "object",
+      "required": ["pipeline_status"],
+      "additionalProperties": false,
+      "properties": {
+        "pipeline_status": {
+          "type": "string",
+          "enum": ["idle", "running", "complete", "failed"],
+          "description": "Current state of the spectral computation pipeline."
+        },
+        "eigenvalues": {
+          "type": "array",
+          "description": "Most recent eigenvalue set (subset shown if large).",
+          "items": { "type": "number" }
+        },
+        "sparc_galaxies_analysed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of SPARC galaxies processed to date."
+        },
+        "krylov_dim": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Current Krylov subspace dimension."
+        },
+        "last_run_id": { "type": "string" }
+      }
+    }
+  }
+}

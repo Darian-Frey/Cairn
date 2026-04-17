@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Darian-Frey/Cairn/schemas/projects/terra-siege.json",
+  "title": "CAIRN_V1 — terra-siege extension",
+  "description": "Project-specific fields for terra-siege (C++20 / raylib Atari ST reimagining).",
+  "type": "object",
+  "required": ["PROJ_EXT"],
+  "properties": {
+    "project": { "const": "terra-siege" },
+    "PROJ_EXT": {
+      "type": "object",
+      "required": ["build_phase", "systems"],
+      "additionalProperties": false,
+      "properties": {
+        "build_phase": {
+          "type": "string",
+          "enum": ["design", "prototype", "alpha", "beta", "release"]
+        },
+        "systems": {
+          "type": "array",
+          "description": "Gameplay / engine subsystems with completion percentages.",
+          "items": {
+            "type": "object",
+            "required": ["id", "desc", "completion_pct"],
+            "properties": {
+              "id": { "type": "string" },
+              "desc": { "type": "string" },
+              "completion_pct": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "owner": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "target_platforms": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

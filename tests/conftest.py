@@ -14,7 +14,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from tools.cairn_scanner import compute_st_h  # noqa: E402
 
-OLD_CODE_FIXTURES = REPO_ROOT / "old_code" / "snapshots"
+OLD_CODE_FIXTURES = REPO_ROOT / "old_code" / "ltm_bridge" / "snapshots"
 
 
 @pytest.fixture
@@ -68,11 +68,17 @@ def clone_snapshot():
 
 @pytest.fixture
 def tmp_capsule_env(tmp_path, monkeypatch):
-    """Redirect capsule writes into a temp dir for isolation."""
+    """Redirect capsule + index writes into a temp dir for isolation."""
     import tools.cairn_scanner as scanner_mod
 
     caps_dir = tmp_path / "capsules"
     registry = caps_dir / "registry.json"
+    snaps_dir = tmp_path / "snapshots"
+    index = snaps_dir / "index.json"
+    snaps_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(scanner_mod, "CAPSULES_DIR", caps_dir)
     monkeypatch.setattr(scanner_mod, "CAPSULE_REGISTRY", registry)
-    return caps_dir, registry
+    monkeypatch.setattr(scanner_mod, "SNAPSHOTS_DIR", snaps_dir)
+    monkeypatch.setattr(scanner_mod, "SNAPSHOT_INDEX", index)
+    monkeypatch.setattr(scanner_mod, "REPO_ROOT", tmp_path)
+    return caps_dir, registry, snaps_dir, index

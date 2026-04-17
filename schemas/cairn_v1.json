@@ -100,6 +100,10 @@
         },
         "additionalProperties": true
       }
+    },
+    "PROJ_EXT": {
+      "type": "object",
+      "description": "Project-specific extension payload. Shape is enforced by the matching fragment in schemas/projects/<project>.json when one exists."
     }
   },
   "allOf": [

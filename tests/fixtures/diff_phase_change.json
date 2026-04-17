@@ -1,0 +1,79 @@
+{
+  "CON": [
+    "No SCHEMA_V5 naming",
+    "No clipboard watcher"
+  ],
+  "CTX": "Index wiring complete. Client scaffolding next.",
+  "DEP": [
+    {
+      "comp": "python",
+      "id": "dep_python",
+      "role": "runtime",
+      "ver": "3.12"
+    },
+    {
+      "comp": "jsonschema",
+      "id": "dep_jsonschema",
+      "role": "validation",
+      "ver": ">=4.0"
+    },
+    {
+      "comp": "git",
+      "id": "dep_git",
+      "role": "commit-pipeline",
+      "ver": ">=2.30"
+    }
+  ],
+  "MR": [
+    {
+      "id": "cairn-repo",
+      "kind": "gh",
+      "ref": "github.com/Darian-Frey/Cairn"
+    },
+    {
+      "id": "ltm-bridge-client",
+      "kind": "path",
+      "ref": "old_code/ltm_bridge/ltm_bridge_client.py"
+    }
+  ],
+  "OBJ": "Begin cairn_client.py evolution from LTM-Bridge base.",
+  "PAY": {
+    "pct": 45,
+    "phase": "Foundation \u2014 client scaffolding"
+  },
+  "RSK": [
+    {
+      "blocking": false,
+      "desc": "CAIRN_V1 fixtures authored; \u00a78 cases #1, #3, #4 unblocked.",
+      "id": "r_no_fixtures",
+      "level": "info"
+    }
+  ],
+  "ST_H": "9101AEE019578DEE",
+  "UV": [
+    {
+      "blocking": true,
+      "d_task": "DT-05",
+      "desc": "Client foundation",
+      "tasks": [
+        {
+          "id": "uv_client_diff",
+          "obj": "Port get_diff() from LTM-Bridge",
+          "priority": "p1"
+        },
+        {
+          "id": "uv_client_commit",
+          "obj": "Port commit_snapshot()",
+          "priority": "p1"
+        },
+        {
+          "id": "uv_client_prune",
+          "obj": "Implement --prune (preserve capsules)",
+          "priority": "p2"
+        }
+      ]
+    }
+  ],
+  "parent_ST_H": "E4272CB609F27255",
+  "project": "cairn"
+}

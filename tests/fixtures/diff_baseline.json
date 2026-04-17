@@ -1,0 +1,63 @@
+{
+  "CON": [
+    "No SCHEMA_V5 naming",
+    "No clipboard watcher"
+  ],
+  "CTX": "Foundation phase in progress. Scanner and schema complete.",
+  "DEP": [
+    {
+      "comp": "python",
+      "id": "dep_python",
+      "role": "runtime",
+      "ver": "3.12"
+    },
+    {
+      "comp": "jsonschema",
+      "id": "dep_jsonschema",
+      "role": "validation",
+      "ver": ">=4.0"
+    }
+  ],
+  "MR": [
+    {
+      "id": "cairn-repo",
+      "kind": "gh",
+      "ref": "github.com/Darian-Frey/Cairn"
+    }
+  ],
+  "OBJ": "Wire the index and begin client work.",
+  "PAY": {
+    "pct": 35,
+    "phase": "Foundation \u2014 index wiring"
+  },
+  "RSK": [
+    {
+      "blocking": false,
+      "desc": "No CAIRN_V1 fixtures yet \u2014 \u00a78 cases partially covered.",
+      "id": "r_no_fixtures",
+      "level": "medium"
+    }
+  ],
+  "ST_H": "E4272CB609F27255",
+  "UV": [
+    {
+      "blocking": true,
+      "d_task": "DT-04",
+      "desc": "Index wiring",
+      "tasks": [
+        {
+          "id": "uv_seed_index",
+          "obj": "Seed snapshots/index.json",
+          "priority": "p1"
+        },
+        {
+          "id": "uv_update_index",
+          "obj": "Implement update_index()",
+          "priority": "p1"
+        }
+      ]
+    }
+  ],
+  "parent_ST_H": null,
+  "project": "cairn"
+}

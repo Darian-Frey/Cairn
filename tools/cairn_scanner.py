@@ -12,8 +12,15 @@ import jsonschema
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = REPO_ROOT / "schemas" / "cairn_v1.json"
+PROJECTS_SCHEMA_DIR = REPO_ROOT / "schemas" / "projects"
 CAPSULES_DIR = REPO_ROOT / "capsules"
 CAPSULE_REGISTRY = CAPSULES_DIR / "registry.json"
+SNAPSHOTS_DIR = REPO_ROOT / "snapshots"
+SNAPSHOT_INDEX = SNAPSHOTS_DIR / "index.json"
+
+
+def _utc_iso_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def compute_st_h(snapshot: dict) -> str:
@@ -27,20 +34,54 @@ class CapsuleError(Exception):
 
 
 class CairnScanner:
-    def __init__(self, schema_path: Path | str = SCHEMA_PATH) -> None:
+    def __init__(
+        self,
+        schema_path: Path | str = SCHEMA_PATH,
+        projects_dir: Path | str | None = PROJECTS_SCHEMA_DIR,
+    ) -> None:
         self.schema_path = Path(schema_path)
         with self.schema_path.open("r", encoding="utf-8") as f:
             self.schema = json.load(f)
         self._validator = jsonschema.Draft7Validator(self.schema)
+        self.projects_dir = Path(projects_dir) if projects_dir else None
+        self._project_validators: dict[str, jsonschema.Draft7Validator] = {}
+
+    def _project_validator(self, project: str) -> jsonschema.Draft7Validator | None:
+        """Return a validator for the project extension, or None if no fragment exists."""
+        if not self.projects_dir or not project:
+            return None
+        if project in self._project_validators:
+            return self._project_validators[project]
+        fragment_path = self.projects_dir / f"{project}.json"
+        if not fragment_path.exists():
+            self._project_validators[project] = None  # type: ignore[assignment]
+            return None
+        with fragment_path.open("r", encoding="utf-8") as f:
+            fragment = json.load(f)
+        validator = jsonschema.Draft7Validator(fragment)
+        self._project_validators[project] = validator
+        return validator
 
     def validate_schema(self, snapshot: dict) -> bool:
-        return self._validator.is_valid(snapshot)
+        if not self._validator.is_valid(snapshot):
+            return False
+        ext = self._project_validator(snapshot.get("project", ""))
+        if ext is None:
+            return True
+        return ext.is_valid(snapshot)
 
     def schema_errors(self, snapshot: dict) -> list[str]:
-        return [
+        errors = [
             f"{'/'.join(str(p) for p in e.absolute_path) or '<root>'}: {e.message}"
             for e in self._validator.iter_errors(snapshot)
         ]
+        ext = self._project_validator(snapshot.get("project", ""))
+        if ext is not None:
+            project = snapshot.get("project", "")
+            for e in ext.iter_errors(snapshot):
+                path = "/".join(str(p) for p in e.absolute_path) or "<root>"
+                errors.append(f"[{project}] {path}: {e.message}")
+        return errors
 
     def verify_integrity(self, snapshot: dict) -> bool:
         claimed = snapshot.get("ST_H")
@@ -144,13 +185,14 @@ class CairnScanner:
 
         record = {
             "capsule_id": capsule_id,
-            "sealed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "sealed_at": _utc_iso_now(),
             "ST_H": sealed["ST_H"],
             "project": sealed["project"],
             "phase": sealed.get("PAY", {}).get("phase", ""),
             "certified": True,
         }
         self._append_registry(record)
+        self._index_add_capsule(sealed, capsule_path, record)
         return record
 
     def _append_registry(self, record: dict) -> None:
@@ -162,6 +204,81 @@ class CairnScanner:
         registry["capsules"].append(record)
         with CAPSULE_REGISTRY.open("w", encoding="utf-8") as f:
             json.dump(registry, f, indent=2, sort_keys=True)
+
+    def update_index(
+        self,
+        snapshot: dict,
+        snapshot_path: str | Path,
+        *,
+        tags: list[str] | None = None,
+        index_path: Path = SNAPSHOT_INDEX,
+        root: Path | None = None,
+    ) -> dict:
+        """Upsert a snapshot entry in snapshots/index.json.
+
+        Keyed on the relative file path — re-committing the same file updates
+        its entry in place rather than duplicating.
+        """
+        snapshot_path = Path(snapshot_path)
+        root = Path(root) if root is not None else REPO_ROOT
+        try:
+            rel = str(snapshot_path.resolve().relative_to(root.resolve()))
+        except ValueError:
+            rel = snapshot_path.name
+
+        entry = {
+            "file": rel,
+            "ST_H": snapshot["ST_H"],
+            "project": snapshot["project"],
+            "phase": snapshot.get("PAY", {}).get("phase", ""),
+            "pct": snapshot.get("PAY", {}).get("pct", 0),
+            "tags": tags or [],
+            "capsule": bool(snapshot.get("capsule", False)),
+        }
+        parent = snapshot.get("parent_ST_H")
+        if parent is not None:
+            entry["parent_ST_H"] = parent
+
+        index = self._load_index(index_path)
+        index["snapshots"] = [e for e in index.get("snapshots", []) if e.get("file") != rel]
+        index["snapshots"].append(entry)
+        index["updated_at"] = _utc_iso_now()
+        self._write_index(index, index_path)
+        return entry
+
+    def _index_add_capsule(self, sealed: dict, capsule_path: Path, record: dict) -> None:
+        try:
+            rel = str(capsule_path.resolve().relative_to(REPO_ROOT.resolve()))
+        except ValueError:
+            rel = capsule_path.name
+
+        entry = {
+            "file": rel,
+            "capsule_id": record["capsule_id"],
+            "ST_H": sealed["ST_H"],
+            "project": sealed["project"],
+            "phase": record["phase"],
+        }
+        index = self._load_index(SNAPSHOT_INDEX)
+        index["capsules"] = [
+            e for e in index.get("capsules", []) if e.get("capsule_id") != record["capsule_id"]
+        ]
+        index["capsules"].append(entry)
+        index["updated_at"] = _utc_iso_now()
+        self._write_index(index, SNAPSHOT_INDEX)
+
+    @staticmethod
+    def _load_index(path: Path) -> dict:
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        return {"version": "1", "updated_at": None, "snapshots": [], "capsules": []}
+
+    @staticmethod
+    def _write_index(index: dict, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(index, f, indent=2, sort_keys=True)
 
     def validate_index(
         self,

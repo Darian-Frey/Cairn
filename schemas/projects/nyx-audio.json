@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Darian-Frey/Cairn/schemas/projects/nyx-audio.json",
+  "title": "CAIRN_V1 — Nyx-Audio extension",
+  "description": "Project-specific fields for Nyx-Audio (Rust audio synthesis library).",
+  "type": "object",
+  "required": ["PROJ_EXT"],
+  "properties": {
+    "project": { "const": "nyx-audio" },
+    "PROJ_EXT": {
+      "type": "object",
+      "required": ["modules"],
+      "additionalProperties": false,
+      "properties": {
+        "modules": {
+          "type": "array",
+          "description": "Library modules with completion and API stability tracking.",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "completion_pct", "api_stability"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "completion_pct": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "api_stability": {
+                "type": "string",
+                "enum": ["experimental", "beta", "stable", "deprecated"]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "msrv": {
+          "type": "string",
+          "description": "Minimum supported Rust version."
+        },
+        "crate_version": { "type": "string" }
+      }
+    }
+  }
+}
